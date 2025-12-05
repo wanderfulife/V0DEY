@@ -40,6 +40,12 @@
   --radius-medium: 16px;
   --radius-large: 24px;
 
+  /* Glassmorphism variables */
+  --glass-bg: rgba(255, 255, 255, 0.15);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.2);
+  --glass-backdrop: blur(12px);
+
   /* Shadows (Soft UI / Neumorphism inspired) */
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -117,6 +123,16 @@ a {
 
 a:hover {
   color: var(--color-primary-hover);
+}
+
+/* === Glassmorphism Effect === */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--radius-large);
 }
 
 /* === Utility Classes === */

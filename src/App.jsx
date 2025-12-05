@@ -1,10 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense, useMemo } from 'react';
+import { gsap } from 'gsap';
 import FrancophonieChecker from './components/FrancophonieChecker';
-import CIPPCalculator from './components/CIPPCalculator';
-import CISVCalculator from './components/CISVCalculator';
-import CIEMCalculator from './components/CIEMCalculator';
 import GlobalSummary from './components/GlobalSummary';
 import './App.css';
+
+// Lazy load calculator components for better performance
+const CIPPCalculator = lazy(() => import('./components/CIPPCalculator'));
+const CISVCalculator = lazy(() => import('./components/CISVCalculator'));
+const CIEMCalculator = lazy(() => import('./components/CIEMCalculator'));
+
+// Loading component for lazy-loaded calculators
+const CalculatorLoader = () => (
+  <div className="calculator-loader">
+    <div className="loading-spinner"></div>
+    <p>Chargement du simulateur...</p>
+  </div>
+);
 
 function App() {
   const [selectedCalculator, setSelectedCalculator] = useState(null);
@@ -16,19 +27,114 @@ function App() {
   const [results, setResults] = useState({ CIPP: null, CISV: null, CIEM: null });
   const [isHeaderScrolled, setIsHeaderScrolled] = useState(false);
 
+  // Animation setup for calculator transitions
+  useEffect(() => {
+    if (selectedCalculator) {
+      // Smooth scroll to top
+      window.scrollTo(0, 0);
+
+      // Animate in the calculator view
+      gsap.fromTo('.calculator-view',
+        { opacity: 0, y: 30 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.6,
+          ease: 'power3.out',
+          delay: 0.2
+        }
+      );
+    }
+  }, [selectedCalculator]);
+
+  // Animation when going back to calculator selection
+  const handleBackToSelection = () => {
+    gsap.to('.calculator-view',
+      {
+        opacity: 0,
+        y: -20,
+        duration: 0.4,
+        ease: 'power2.in',
+        onComplete: () => setSelectedCalculator(null)
+      }
+    );
+  };
+
+  // Handle header scroll effect
   useEffect(() => {
     const handleScroll = () => {
       setIsHeaderScrolled(window.scrollY > 50);
     };
+
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Calculate hasResults - must be defined before useEffect that uses it
+  const resultsList = useMemo(() => Object.values(results), [results]);
+  const hasResults = useMemo(() => resultsList.some(r => r && r.eligible), [resultsList]);
+
+  // Scroll-triggered animations using Intersection Observer (CSP-safe alternative to ScrollTrigger)
   useEffect(() => {
-    if (selectedCalculator) {
-      window.scrollTo(0, 0);
+    if (!selectedCalculator) {
+      const observerOptions = {
+        root: null,
+        rootMargin: '0px',
+        threshold: 0.1
+      };
+
+      const animateOnIntersect = (entries, observer) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const target = entry.target;
+
+            if (target.classList.contains('calculator-card')) {
+              gsap.fromTo(target,
+                { opacity: 0, y: 30 },
+                { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out' }
+              );
+            } else if (target.classList.contains('hero-content')) {
+              gsap.fromTo(target.querySelector('h1'),
+                { opacity: 0, y: 30 },
+                { opacity: 1, y: 0, duration: 1, ease: 'power3.out' }
+              );
+              gsap.fromTo(target.querySelector('.subtitle'),
+                { opacity: 0, y: 20 },
+                { opacity: 1, y: 0, duration: 1, delay: 0.2, ease: 'power2.out' }
+              );
+            } else if (target.classList.contains('summary-card')) {
+              gsap.fromTo(target,
+                { opacity: 0, y: 20 },
+                { opacity: 1, y: 0, duration: 0.8, ease: 'power2.out' }
+              );
+            }
+
+            observer.unobserve(target);
+          }
+        });
+      };
+
+      const observer = new IntersectionObserver(animateOnIntersect, observerOptions);
+
+      // Observe elements
+      const timer = setTimeout(() => {
+        document.querySelectorAll('.calculator-card').forEach(card => observer.observe(card));
+
+        const heroContent = document.querySelector('.hero-content');
+        if (heroContent) observer.observe(heroContent);
+
+        if (hasResults) {
+          const summaryCard = document.querySelector('.summary-card');
+          if (summaryCard) observer.observe(summaryCard);
+        }
+      }, 100);
+
+      return () => {
+        clearTimeout(timer);
+        observer.disconnect();
+      };
     }
-  }, [selectedCalculator]);
+  }, [selectedCalculator, hasResults]);
 
   const handleFrancophonieChange = (data) => setFrancophonieData(data);
   const handleResult = (result) => setResults(prev => ({ ...prev, [result.type]: result }));
@@ -42,15 +148,27 @@ function App() {
   const renderCalculator = () => {
     const props = { francophonieData, onResult: handleResult };
     switch(selectedCalculator) {
-      case 'CIPP': return <CIPPCalculator {...props} />;
-      case 'CISV': return <CISVCalculator {...props} />;
-      case 'CIEM': return <CIEMCalculator {...props} />;
+      case 'CIPP':
+        return (
+          <Suspense fallback={<CalculatorLoader />}>
+            <CIPPCalculator {...props} />
+          </Suspense>
+        );
+      case 'CISV':
+        return (
+          <Suspense fallback={<CalculatorLoader />}>
+            <CISVCalculator {...props} />
+          </Suspense>
+        );
+      case 'CIEM':
+        return (
+          <Suspense fallback={<CalculatorLoader />}>
+            <CIEMCalculator {...props} />
+          </Suspense>
+        );
       default: return null;
     }
   };
-
-  const resultsList = Object.values(results);
-  const hasResults = resultsList.some(r => r && r.eligible);
 
   return (
     <div className="app">
@@ -67,6 +185,12 @@ function App() {
         {!selectedCalculator ? (
           <>
             <section className="hero-section">
+              <div className="hero-background-elements">
+                <div className="circle circle-1"></div>
+                <div className="circle circle-2"></div>
+                <div className="wave wave-1"></div>
+                <div className="wave wave-2"></div>
+              </div>
               <div className="hero-content container">
                 <h1>Estimez vos crédits d'impôt pour la musique.</h1>
                 <p className="subtitle">
@@ -101,7 +225,7 @@ function App() {
           </>
         ) : (
           <div className="calculator-view container">
-            <button className="btn-back" onClick={() => setSelectedCalculator(null)}>
+            <button className="btn-back" onClick={handleBackToSelection}>
               <span>←</span> Retour à la sélection
             </button>
             <FrancophonieChecker onDataChange={handleFrancophonieChange} />
